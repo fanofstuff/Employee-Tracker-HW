@@ -41,19 +41,25 @@ function runSearch() {
     .then(function (answer) {
       switch (answer.action) {
         case "View All Employees":
-          allEmployees(); 
+          allEmployees();
           break;
         case "View All Departments":
+          viewDepartments();
           break;
         case "View All Roles":
+          viewRoles();
           break;
         case "Add Employee":
+          addEmployee();
           break;
         case "Add Department":
+          addDepartment();
           break;
         case "Add Role":
+          addRole();
           break;
         case "Update Employee Role":
+          updateRole();
           break;
 
         case "Exit":
@@ -65,124 +71,221 @@ function runSearch() {
 
 function allEmployees() {
   connection.query(
-    "SELECT e.id, e.first_name AS First_Name, e.last_name AS Last_Name, role.title AS Title, department.name AS Department, role.salary AS Salary, CONCAT(m.first_name, ' ', m.last_name) AS Manager FROM employee e INNER JOIN role ON e.role_id=role.id INNER JOIN department ON role.department_id=department.id LEFT JOIN employee m ON m.id=e.manager_id ORDER BY e.id ASC", 
-    function(err, res){
-      console.table("All Employee Information", res); 
-      runSearch(); 
-    });
-}
-
-function artistSearch() {
-  inquirer
-    .prompt({
-      name: "artist",
-      type: "input",
-      message: "What artist would you like to search for?",
-    })
-    .then(function (answer) {
-      var query = "SELECT position, song, year FROM top5000 WHERE ?";
-      connection.query(query, { artist: answer.artist }, function (err, res) {
-        if (err) throw err;
-        for (var i = 0; i < res.length; i++) {
-          console.log(
-            "Position: " +
-              res[i].position +
-              " || Song: " +
-              res[i].song +
-              " || Year: " +
-              res[i].year
-          );
-        }
-        runSearch();
-      });
-    });
-}
-
-function multiSearch() {
-  var query = "SELECT artist FROM top5000 GROUP BY artist HAVING count(*) > 1";
-  connection.query(query, function (err, res) {
-    if (err) throw err;
-    for (var i = 0; i < res.length; i++) {
-      console.log(res[i].artist);
+    "SELECT e.id, e.first_name AS First_Name, e.last_name AS Last_Name, role.title AS Title, department.name AS Department, role.salary AS Salary, CONCAT(m.first_name, ' ', m.last_name) AS Manager FROM employee e INNER JOIN role ON e.role_id=role.id INNER JOIN department ON role.department_id=department.id LEFT JOIN employee m ON m.id=e.manager_id ORDER BY e.id ASC",
+    function (err, res) {
+      console.table("All Employee Information", res);
+      runSearch();
     }
+  );
+}
+
+function viewDepartments() {
+  connection.query("SELECT * FROM department", function (err, res) {
+    console.table("All Departments", res);
     runSearch();
   });
 }
 
-function rangeSearch() {
+function viewRoles() {
+  connection.query(
+    "SELECT role.id, role.title, role.salary, department.name AS department FROM role INNER JOIN department ON role.department_id=department.id",
+    function (err, res) {
+      console.table("All Roles", res);
+      runSearch();
+    }
+  );
+}
+
+function addEmployee() {
+  var roles = [];
+  var managers = [];
+  connection.query("SELECT title FROM role", function (err, res) {
+    for (let i = 0; i < res.length; i++) {
+      roles.push(res[i].title);
+    }
+    return roles;
+  });
+  connection.query(
+    "SELECT CONCAT(first_name, ' ', last_name) AS name FROM employee",
+    function (err, res) {
+      for (let i = 0; i < res.length; i++) {
+        managers.push(res[i].name);
+      }
+      return managers;
+    }
+  );
   inquirer
     .prompt([
       {
-        name: "start",
         type: "input",
-        message: "Enter starting position: ",
-        validate: function (value) {
-          if (isNaN(value) === false) {
-            return true;
-          }
-          return false;
-        },
+        name: "first",
+        message: "What is the employee's first name?",
       },
       {
-        name: "end",
         type: "input",
-        message: "Enter ending position: ",
-        validate: function (value) {
-          if (isNaN(value) === false) {
-            return true;
-          }
-          return false;
-        },
+        name: "last",
+        message: "What is the employee's last name?",
+      },
+      {
+        type: "list",
+        name: "role",
+        message: "What is the employee's role?",
+        choices: roles,
+      },
+      {
+        type: "list",
+        name: "manager",
+        message: "Who is the employee's manager?",
+        choices: managers,
       },
     ])
-    .then(function (answer) {
-      var query =
-        "SELECT position,song,artist,year FROM top5000 WHERE position BETWEEN ? AND ?";
-      connection.query(query, [answer.start, answer.end], function (err, res) {
-        if (err) throw err;
-        for (var i = 0; i < res.length; i++) {
-          console.log(
-            "Position: " +
-              res[i].position +
-              " || Song: " +
-              res[i].song +
-              " || Artist: " +
-              res[i].artist +
-              " || Year: " +
-              res[i].year
+    .then((answers) => {
+      var roleID = [];
+      var managerID = [];
+      connection.query(
+        "SELECT id FROM role WHERE title = ?",
+        [answers.role],
+        function (err, res) {
+          for (let i = 0; i < res.length; i++) {
+            roleID.push(res[i].id);
+          }
+          connection.query(
+            "SELECT id FROM employee WHERE CONCAT(first_name, ' ', last_name) = ?",
+            [answers.manager],
+            function (err, res) {
+              for (let i = 0; i < res.length; i++) {
+                managerID.push(res[i].id);
+              }
+              connection.query(
+                "INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES (?, ?, ?, ?)",
+                [answers.first, answers.last, roleID, managerID],
+                function (err, res) {
+                  runSearch();
+                }
+              );
+            }
           );
         }
-        runSearch();
-      });
+      );
     });
 }
 
-function songSearch() {
+function addDepartment() {
   inquirer
-    .prompt({
-      name: "song",
-      type: "input",
-      message: "What song would you like to look for?",
-    })
-    .then(function (answer) {
-      console.log(answer.song);
+    .prompt([
+      {
+        name: "department",
+        type: "input",
+        message: "What department should be added?",
+      },
+    ])
+    .then((answers) => {
       connection.query(
-        "SELECT * FROM top5000 WHERE ?",
-        { song: answer.song },
+        "INSERT INTO department (name) VALUES (?)",
+        [answers.department],
         function (err, res) {
-          if (err) throw err;
-          console.log(
-            "Position: " +
-              res[0].position +
-              " || Song: " +
-              res[0].song +
-              " || Artist: " +
-              res[0].artist +
-              " || Year: " +
-              res[0].year
-          );
           runSearch();
         }
       );
     });
+}
+
+function addRole() {
+  var departments = [];
+  connection.query("SELECT name FROM department", function (err, res) {
+    for (let i = 0; i < res.length; i++) {
+      departments.push(res[i].name);
+    }
+    return departments;
+  });
+  inquirer
+    .prompt([
+      {
+        name: "title",
+        type: "input",
+        message: "What should the role by titled?",
+      },
+      {
+        name: "salary",
+        type: "input",
+        message: "How much should this role make per year?",
+      },
+      {
+        name: "department",
+        type: "list",
+        message: "What department should this role be a part of?",
+        choices: departments,
+      },
+    ])
+    .then((answers) => {
+      var departmentID = [];
+      connection.query(
+        "SELECT id FROM department WHERE name = ?",
+        [answers.department],
+        function (err, res) {
+          for (let i = 0; i < res.length; i++) {
+            departmentID.push(res[i].id);
+          }
+          connection.query(
+            "INSERT INTO role (title, salary, department_id) VALUES (?, ?, ?)",
+            [answers.title, answers.salary, departmentID],
+            function (err, res) {
+              runSearch();
+            }
+          );
+        }
+      );
+    });
+}
+
+function updateRole() {
+  var employees = [];
+  var roles = [];
+  connection.query(
+    "SELECT CONCAT(first_name, ' ', last_name) AS name FROM employee",
+    function (err, res) {
+      for (let i = 0; i < res.length; i++) {
+        employees.push(res[i].name);
+      }
+      connection.query("SELECT title FROM role", function (err, res) {
+        for (let i = 0; i < res.length; i++) {
+          roles.push(res[i].title);
+        }
+        inquirer
+          .prompt([
+            {
+              name: "employee",
+              type: "list",
+              message: "Who do you want to update?",
+              choices: employees,
+            },
+            {
+              name: "role",
+              type: "list",
+              message: "What role should they now have?",
+              choices: roles,
+            },
+          ])
+          .then((answers) => {
+            var roleID = [];
+            connection.query(
+              "SELECT id FROM role WHERE title = ?",
+              [answers.role],
+              function (err, res) {
+                for (let i = 0; i < res.length; i++) {
+                  roleID.push(res[i].id);
+                }
+                connection.query(
+                  "UPDATE employee SET role_id = ? WHERE CONCAT(first_name, ' ', last_name) = ?",
+                  [roleID, answers.employee],
+                  function (err, res) {
+                    runSearch();
+                  }
+                );
+              }
+            );
+          });
+      });
+    }
+  );
 }
